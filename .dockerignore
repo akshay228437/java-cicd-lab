@@ -1,7 +1,9 @@
 .git
 .idea
 .vscode
-**/target
+# Include only the executable JAR from Maven's output directory.
+target/*
+!target/java-cicd-lab.jar
 **/*.log
 .env
 .env.*
