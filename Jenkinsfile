@@ -6,6 +6,7 @@ pipeline {
     options {
         timestamps()
         disableConcurrentBuilds()
+        skipStagesAfterUnstable()
         skipDefaultCheckout()
         timeout(time: 30, unit: 'MINUTES')
     }
@@ -29,6 +30,41 @@ pipeline {
                 success {
                     archiveArtifacts artifacts: 'target/java-cicd-lab.jar',
                                      fingerprint: true
+                }
+            }
+        }
+
+        stage('SonarQube Analysis') {
+            steps {
+                // Server name under Manage Jenkins > System > SonarQube servers.
+                // The token must be a Secret text credential with ID sonarqube.
+                withSonarQubeEnv(installationName: 'sonarqube', credentialsId: 'sonarqube') {
+                    sh '''
+                        set +x
+                        set -eu
+                        export SONAR_TOKEN="$SONAR_AUTH_TOKEN"
+
+                        mvn -B -ntp \
+                          org.sonarsource.scanner.maven:sonar-maven-plugin:5.6.0.6792:sonar \
+                          -Dsonar.projectKey=java-cicd-lab \
+                          -Dsonar.projectName=java-cicd-lab \
+                          -Dsonar.coverage.jacoco.xmlReportPaths=target/site/jacoco/jacoco.xml
+                    '''
+                }
+            }
+        }
+
+        stage('SonarQube Quality Gate') {
+            steps {
+                // SonarQube must send its webhook to:
+                // https://<jenkins-host>/sonarqube-webhook/
+                timeout(time: 10, unit: 'MINUTES') {
+                    script {
+                        def gate = waitForQualityGate()
+                        if (gate.status != 'OK') {
+                            error("SonarQube Quality Gate failed: ${gate.status}")
+                        }
+                    }
                 }
             }
         }
